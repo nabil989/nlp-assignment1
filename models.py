@@ -132,11 +132,15 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     :param feat_extractor: feature extractor to use
     :return: trained PerceptronClassifier model
     """
+    for ex in train_exs:
+        feat_extractor.extract_features(ex.words, add_to_indexer=True)
+    
     indexer = feat_extractor.indexer
     # for ex in train_exs:
     #     feat_extractor.extract_features(ex.words, add_to_indexer=True)
     vocab_size = len(indexer)
     weights = np.zeros(vocab_size)
+    print(weights)
     num_epochs = 10
     
     for _ in range(num_epochs):
@@ -150,7 +154,7 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
             # if the prediction is not the same as labeled then we update the weights
             if prediction != ex.label:
                 for index, count in feature_vector.items():
-                    weights[index] += 1.0 * (ex.label - prediction) * count
+                    weights[index] += (1.0 * (ex.label - prediction) * count)
     return PerceptronClassifier(weights, feat_extractor)
 
 
