@@ -108,7 +108,7 @@ class PerceptronClassifier(SentimentClassifier):
         """
         feature_vector = self.feature_extractor.extract_features(sentence, add_to_indexer=False)
         
-        # Compute the dot product of the weights and the feature vector
+        # score is the dot product of the weights and the feature vector
         score = sum(self.weights[index] * count for index, count in feature_vector.items())
         
         # Return 1 if the score is positive, otherwise return 0
@@ -136,15 +136,13 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
         feat_extractor.extract_features(ex.words, add_to_indexer=True)
     
     indexer = feat_extractor.indexer
-    # for ex in train_exs:
-    #     feat_extractor.extract_features(ex.words, add_to_indexer=True)
     vocab_size = len(indexer)
     weights = np.zeros(vocab_size)
-    print(weights)
     num_epochs = 10
-    
-    for _ in range(num_epochs):
-        random.shuffle(train_exs)
+    initial_learning_rate = 1.0
+    for epoch in range(num_epochs):
+        # randomize data
+        # learning_rate = initial_learning_rate 
         for ex in train_exs:
             # extract features for cur example
             feature_vector = feat_extractor.extract_features(ex.words, add_to_indexer=False)
@@ -154,13 +152,8 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
             # if the prediction is not the same as labeled then we update the weights
             if prediction != ex.label:
                 for index, count in feature_vector.items():
-                    weights[index] += (1.0 * (ex.label - prediction) * count)
+                    weights[index] += (initial_learning_rate * (ex.label - prediction) * count)
     return PerceptronClassifier(weights, feat_extractor)
-
-
-        
-        
-    # raise Exception("Must be implemented")
 
 
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
