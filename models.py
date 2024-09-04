@@ -151,7 +151,7 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
             if prediction != ex.label:
                 for index, count in feature_vector.items():
                     weights[index] += 1.0 * (ex.label - prediction) * count
-    return PerceptronClassifier(weights, indexer)
+    return PerceptronClassifier(weights, feat_extractor)
 
 
         
