@@ -34,7 +34,7 @@ class UnigramFeatureExtractor(FeatureExtractor):
     """
     def __init__(self, indexer: Indexer):
         self.indexer = indexer
-        self.stop_words = ["and", "the", "is"]
+        self.stop_words = ["the", "is", "in", "and", "of", "a", "to", "it"]
 
     def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
         feature_counter = Counter()
@@ -51,16 +51,33 @@ class UnigramFeatureExtractor(FeatureExtractor):
             feature_counter[word_index] += 1
         return feature_counter
 
-        
-    
-
-
 class BigramFeatureExtractor(FeatureExtractor):
     """
     Bigram feature extractor analogous to the unigram one.
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
+        self.stop_words = ["the", "is", "in", "and", "of", "a", "to", "it"]
+        
+        
+    def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
+        feature_counter = Counter()
+        n = len(sentence)
+        for i in range(n-1):
+            start_word = sentence[i].lower()
+            adjacent_word = sentence[i+1].lower()
+            if start_word in self.stop_words or adjacent_word in self.stop_words:
+                continue
+            bigram_word = start_word + " " + adjacent_word
+            if add_to_indexer:
+                word_index = self.indexer.add_and_get_index(bigram_word)
+            else:
+                word_index = self.indexer.index_of(bigram_word)
+                if word_index == -1:
+                    continue
+            feature_counter[word_index] += 1
+            
+        return feature_counter
 
 
 class BetterFeatureExtractor(FeatureExtractor):
@@ -68,7 +85,70 @@ class BetterFeatureExtractor(FeatureExtractor):
     Better feature extractor...try whatever you can think of!
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
+        self.stop_words = ["the", "is", "in", "and", "of", "a", "to", "it"]
+        self.word_counts = Counter()
+        self.min_freq = 1
+        self.max_freq = 1000
+    
+        
+        
+    def calculate_word_counts(self, train_exs: List[SentimentExample]):
+        for ex in train_exs:
+            words = [word.lower() for word in ex.words]
+            n = len(words)
+            for i in range(n):
+                # unigrams
+                self.word_counts[words[i]] += 1
+                # bigrams
+                # make sure we don't go out of bounds
+                if i+1 < n:
+                    bigram = words[i] + " " + words[i+1]
+                    self.word_counts[bigram] += 1
+
+                
+    def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
+        feature_counter = Counter()
+        words = [word.lower() for word in sentence]
+        sentence_counter = Counter(words)
+        # extract unigrams
+        for word, count in sentence_counter.items():
+            # skip stop words
+            if word in self.stop_words:
+                continue
+            # skip rare words
+            if self.word_counts[word] < self.min_freq:
+                continue
+            # print(count)
+            clipped_count = min(count, self.max_freq)
+            if add_to_indexer:
+                word_index = self.indexer.add_and_get_index(word)
+            else:
+                word_index = self.indexer.index_of(word)
+                if word_index == -1:
+                    continue
+            feature_counter[word_index] = clipped_count
+        # extract bigram
+        n = len(words)-1
+        for i in range(n):
+            word, adj_word = words[i], words[i+1]
+            # skip stop words
+            if word in self.stop_words or adj_word in self.stop_words:
+                continue
+            bigram = word + " " + adj_word
+            bigram_count = sum(1 for j in range(n) if words[j] == word and words[j + 1] == adj_word)
+            # skip rare words
+            if bigram_count < self.min_freq:
+                continue
+            clipped_bigram_count = min(bigram_count, self.max_freq)
+            if add_to_indexer:
+                bigram_index = self.indexer.add_and_get_index(bigram)
+            else:
+                bigram_index = self.indexer.index_of(bigram)
+                if bigram_index == -1:
+                    continue
+            feature_counter[bigram_index] = clipped_bigram_count
+        return feature_counter
 
 
 class SentimentClassifier(object):
@@ -121,9 +201,24 @@ class LogisticRegressionClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
-
+    def __init__(self, weights, feat_extractor):
+        self.weights = weights
+        self.feat_extractor = feat_extractor
+        # raise Exception("Must be implemented")
+    def predict(self, sentence: List[str]) -> int:
+        """
+        :param sentence: words (List[str]) in the sentence to classify
+        :return: Either 0 for negative class or 1 for positive class
+        """
+        # extract features from sentence
+        feature_vector = self.feat_extractor.extract_features(sentence, add_to_indexer=False)
+        # get dot product of weights andn feature vector
+        score = sum(self.weights[index] * count for index, count in feature_vector.items())
+        
+        # apply sigmoid function
+        # sigmoid_score = 1 / (1 + np.exp(-score))
+        sigmoid_score = sigmoid(score)
+        return 1 if sigmoid_score >= 0.5 else 0
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
     """
@@ -134,6 +229,11 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     """
     for ex in train_exs:
         feat_extractor.extract_features(ex.words, add_to_indexer=True)
+    # for ex in train_exs[:10]:  # Limit to 10 for easier inspection
+    #     features = feat_extractor.extract_features(ex.words, add_to_indexer=False)
+    #     print(f"Example words: {ex.words}")
+    #     print(f"Feature vector: {features}")
+
     
     indexer = feat_extractor.indexer
     vocab_size = len(indexer)
@@ -142,19 +242,24 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     initial_learning_rate = 1.0
     for epoch in range(num_epochs):
         # randomize data
-        # learning_rate = initial_learning_rate 
+        random.shuffle(train_exs)
+
+        learning_rate = initial_learning_rate / (epoch+1)
         for ex in train_exs:
             # extract features for cur example
             feature_vector = feat_extractor.extract_features(ex.words, add_to_indexer=False)
             # compute prediction (dot product of weights and feature vector)
             score = sum(weights[index] * count for index, count in feature_vector.items())
             prediction = 1 if score > 0 else 0
-            # if the prediction is not the same as labeled then we update the weights
+            # if the prediction is not the same as label then we update the weights
             if prediction != ex.label:
                 for index, count in feature_vector.items():
-                    weights[index] += (initial_learning_rate * (ex.label - prediction) * count)
+                    weights[index] += (learning_rate * (ex.label - prediction) * count)
+    
     return PerceptronClassifier(weights, feat_extractor)
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
     """
@@ -163,8 +268,26 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :param feat_extractor: feature extractor to use
     :return: trained LogisticRegressionClassifier model
     """
-    raise Exception("Must be implemented")
-
+    # add features to indexer
+    for ex in train_exs:
+        feat_extractor.extract_features(ex.words, add_to_indexer=True)
+    learning_rate = .01
+    indexer = feat_extractor.indexer
+    vocab_size = len(indexer)
+    weights = np.zeros(vocab_size)
+    num_epochs = 10
+    
+    for epoch in range(num_epochs):
+        random.shuffle(train_exs)
+        for ex in train_exs:
+            feature_vector = feat_extractor.extract_features(ex.words, add_to_indexer=False)
+            score = sum(weights[index] * count for index, count in feature_vector.items())
+            predicted_probability = sigmoid(score)
+            # update weights based on prediction
+            for index, count in feature_vector.items():
+                update = learning_rate * (ex.label - predicted_probability) * count
+                weights[index] += update
+    return LogisticRegressionClassifier(weights, feat_extractor)
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
     """
