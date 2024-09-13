@@ -229,10 +229,6 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     """
     for ex in train_exs:
         feat_extractor.extract_features(ex.words, add_to_indexer=True)
-    # for ex in train_exs[:10]:  # Limit to 10 for easier inspection
-    #     features = feat_extractor.extract_features(ex.words, add_to_indexer=False)
-    #     print(f"Example words: {ex.words}")
-    #     print(f"Feature vector: {features}")
 
     
     indexer = feat_extractor.indexer
@@ -245,6 +241,7 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
         random.shuffle(train_exs)
 
         learning_rate = initial_learning_rate / (epoch+1)
+        # learning_rate = 0.5
         for ex in train_exs:
             # extract features for cur example
             feature_vector = feat_extractor.extract_features(ex.words, add_to_indexer=False)
@@ -288,6 +285,8 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
                 update = learning_rate * (ex.label - predicted_probability) * count
                 weights[index] += update
     return LogisticRegressionClassifier(weights, feat_extractor)
+
+    
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
     """
